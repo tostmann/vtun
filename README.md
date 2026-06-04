@@ -57,7 +57,22 @@ This installs `vtund` (in `sbin`), the man pages `vtund.8` and `vtund.conf.5`, a
 
 **Runtime note:** for Blowfish sessions the OpenSSL **"legacy" provider** (`ossl-modules/legacy.so`) must be present at runtime. It ships as part of the standard `openssl` / `libssl3` package on Debian and Ubuntu, so there is normally **nothing extra to install**. AES sessions need only the default provider.
 
-## Install (.deb)
+## Install via apt (recommended)
+
+There is a **signed APT repository** on GitHub Pages, so you can install and stay up to date with `apt`. The snippet below picks the right suite for your system from `/etc/os-release`:
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://tostmann.github.io/vtun/repo-signing-key.asc \
+  | sudo tee /etc/apt/keyrings/vtun.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/vtun.asc] https://tostmann.github.io/vtun/$(. /etc/os-release && echo "$VERSION_CODENAME")/ ./" \
+  | sudo tee /etc/apt/sources.list.d/vtun.list >/dev/null
+sudo apt update && sudo apt install vtun
+```
+
+Supported suites: **bookworm** (Debian 12), **trixie** (Debian 13), **jammy** (Ubuntu 22.04), **noble** (Ubuntu 24.04) — each for **amd64** and **arm64**.
+
+## Install a single .deb manually
 
 Prebuilt `.deb` packages are attached to the **[GitHub Releases](../../releases)** for:
 
