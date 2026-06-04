@@ -45,3 +45,4 @@ __pycache__/
 /pipe_dev.c
 /tcp_proto.c
 /udp_proto.c
+/debian/autoreconf.*
