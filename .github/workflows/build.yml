@@ -125,15 +125,31 @@ jobs:
           path: artifacts/*.deb
           if-no-files-found: error
 
-      # Attach this job's distro-tagged .deb to the GitHub Release for the tag.
-      # softprops/action-gh-release creates the release if it doesn't exist yet
-      # and appends files on subsequent matrix jobs. Distinct per-distro filenames
-      # mean all 8 packages coexist instead of overwriting one another.
-      - name: Attach .deb to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*.deb
-
-    # Release upload requires write permission on repository contents.
+  # ---------------------------------------------------------------------------
+  # 3) Release: ONE job (after the whole matrix) collects every per-distro .deb
+  #    artifact and attaches them to the GitHub Release in a single upload.
+  #    Uploading from a single job avoids the race where parallel matrix jobs
+  #    each try to create the same release (HTTP 422 "tag_name already_exists").
+  # ---------------------------------------------------------------------------
+  release:
+    name: release
+    needs: deb
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
     permissions:
       contents: write
+    steps:
+      - name: Download all .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dl
+          pattern: deb-*
+          merge-multiple: true
+
+      - name: List collected packages
+        run: ls -lR dl
+
+      - name: Attach .deb files to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dl/**/*.deb
