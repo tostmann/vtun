@@ -93,17 +93,25 @@ jobs:
       # debian/source/format is 3.0 (native); -b builds a binary-only
       # package; -us -uc skips GPG signing (no key in CI).
       - name: Build .deb (dpkg-buildpackage)
+        # noautodbgsym: skip the separate -dbgsym package (not useful on a release).
         run: |
-          dpkg-buildpackage -us -uc -b
+          DEB_BUILD_OPTIONS=noautodbgsym dpkg-buildpackage -us -uc -b
 
-      # dpkg-buildpackage drops the artifacts in the PARENT directory.
-      - name: Collect .deb artifacts
+      # dpkg-buildpackage drops the artifacts in the PARENT directory. The .deb
+      # filename does NOT encode the distro (e.g. vtun_3.0.4+fork1_amd64.deb is
+      # produced on every distro), so without a distro tag the packages would
+      # overwrite each other on the Release. Insert a distro slug before the arch.
+      - name: Collect & rename .deb artifacts
         run: |
           mkdir -p artifacts
-          mv ../*.deb artifacts/
+          slug="$(echo '${{ matrix.image }}' | tr ':.' '--')"   # debian:13 -> debian-13
+          for f in ../vtun_*_*.deb; do
+            stem="$(basename "$f" .deb)"        # vtun_3.0.4+fork1_amd64
+            stem="${stem%_*}"                   # vtun_3.0.4+fork1
+            mv "$f" "artifacts/${stem}_${slug}_${{ matrix.arch }}.deb"
+          done
           ls -l artifacts
 
-      # Sanitise the image string for the artifact name (no ':' allowed).
       - name: Compute artifact name
         id: name
         run: |
@@ -117,10 +125,10 @@ jobs:
           path: artifacts/*.deb
           if-no-files-found: error
 
-      # Attach this job's .deb(s) directly to the GitHub Release for the tag.
-      # softprops/action-gh-release creates the release if it doesn't exist
-      # yet and appends files on subsequent matrix jobs. Needs write access
-      # to repository contents (see permissions below).
+      # Attach this job's distro-tagged .deb to the GitHub Release for the tag.
+      # softprops/action-gh-release creates the release if it doesn't exist yet
+      # and appends files on subsequent matrix jobs. Distinct per-distro filenames
+      # mean all 8 packages coexist instead of overwriting one another.
       - name: Attach .deb to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
