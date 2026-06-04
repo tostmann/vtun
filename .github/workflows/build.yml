@@ -91,6 +91,16 @@ jobs:
 
       - uses: actions/checkout@v6
 
+      # Derive the package version from the git tag: v3.0.5 -> 3.0.5, so a new
+      # release is just "git tag vX.Y.Z && git push --tags" — no manual
+      # debian/changelog edit. The tag must be a valid NATIVE version (no '-').
+      - name: Set package version from the git tag
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          sed -i -E "0,/^vtun \([^)]*\)/s//vtun ($ver)/" debian/changelog
+          echo "Building package version: $ver"
+          head -1 debian/changelog
+
       # debian/source/format is 3.0 (native); -b builds a binary-only
       # package; -us -uc skips GPG signing (no key in CI).
       - name: Build .deb (dpkg-buildpackage)

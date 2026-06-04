@@ -86,6 +86,32 @@ Download the package matching your distribution and architecture, then:
 sudo apt install ./vtun_*_amd64.deb     # or the matching arm64 file
 ```
 
+## Run as a service (systemd)
+
+The package ships two native systemd units. They are installed **disabled** (the package never starts a tunnel on its own) — configure first, then enable:
+
+- `vtund.service` — the standalone **server** (hub); reads `/etc/vtund.conf`.
+- `vtund-client@.service` — a **client** template, one instance per session.
+
+**Server / hub:**
+
+```sh
+sudoedit /etc/vtund.conf            # define your sessions
+sudo systemctl enable --now vtund   # start now and on boot
+sudo systemctl reload vtund         # re-read the config (SIGHUP), no tunnel drop
+sudo systemctl status vtund
+```
+
+**Client session** — e.g. a session called `office` (defined in `/etc/vtund.conf`) that dials a server at `vpn.example.org`:
+
+```sh
+echo 'VTUN_PEER=vpn.example.org' | sudo tee /etc/default/vtund-client@office
+sudo systemctl enable --now vtund-client@office
+sudo systemctl status vtund-client@office
+```
+
+The units run `vtund` in the foreground (`-n`) so systemd supervises it (auto-restart on failure). `systemctl reload` sends `SIGHUP`, which makes vtund re-read `/etc/vtund.conf`.
+
 ## Encryption & security
 
 Supported ciphers: **Blowfish** and **AES**, with **128-** and **256-bit** keys, in **ECB / CBC / CFB / OFB** modes.

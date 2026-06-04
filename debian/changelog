@@ -1,3 +1,12 @@
+vtun (3.0.4+fork2) unstable; urgency=medium
+
+  * Add native systemd units: vtund.service (standalone server) and
+    vtund-client@.service (per-session client template), installed disabled.
+  * Ship /etc/vtund.conf as a conffile (default config the units read).
+  * CI derives the package version from the git tag (vX.Y.Z -> X.Y.Z).
+
+ -- Dirk Tostmann <tostmann@gmail.com>  Thu, 04 Jun 2026 21:30:00 +0000
+
 vtun (3.0.4+fork1) unstable; urgency=medium
 
   * Maintained fork making vtun build and run on modern systems (OpenSSL 3.x,

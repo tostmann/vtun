@@ -1,0 +1,16 @@
+[Unit]
+Description=VTun virtual tunnel daemon (standalone server)
+Documentation=man:vtund(8) man:vtund.conf(5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Edit /etc/vtund.conf, then: systemctl enable --now vtund
+ExecStart=/usr/sbin/vtund -s -n -f /etc/vtund.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

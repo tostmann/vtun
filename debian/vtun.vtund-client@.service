@@ -1,0 +1,19 @@
+[Unit]
+Description=VTun client session %i
+Documentation=man:vtund(8) man:vtund.conf(5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Define the session "%i" in /etc/vtund.conf, and set the peer (server address)
+# for it in /etc/default/vtund-client@%i, e.g.:
+#     VTUN_PEER=vpn.example.org
+# then: systemctl enable --now vtund-client@%i
+EnvironmentFile=-/etc/default/vtund-client@%i
+ExecStart=/usr/sbin/vtund -n -f /etc/vtund.conf %i ${VTUN_PEER}
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

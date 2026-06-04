@@ -14,3 +14,13 @@ override_dh_auto_install:
 	install -D -m 0644 vtund.8 debian/vtun/usr/share/man/man8/vtund.8
 	install -D -m 0644 vtund.conf.5 debian/vtun/usr/share/man/man5/vtund.conf.5
 	install -D -m 0644 vtund.conf debian/vtun/usr/share/doc/vtun/examples/vtund.conf
+	# default config (conffile) so the systemd units have a target to read
+	install -D -m 0640 vtund.conf debian/vtun/etc/vtund.conf
+
+# Ship the systemd units (vtund.service + vtund-client@.service) but do NOT
+# enable or start them on install — they need /etc/vtund.conf configured first.
+# The units are not named after the package, so each needs an explicit --name
+# (dh_installsystemd otherwise only looks for debian/vtun.service).
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start --name=vtund
+	dh_installsystemd --no-enable --no-start --name=vtund-client@
