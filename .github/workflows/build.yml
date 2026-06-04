@@ -1,0 +1,131 @@
+# .github/workflows/build.yml
+#
+# CI for vtun (modern-Linux fork of VTun / vtund).
+#
+# Two independent purposes:
+#   1. Smoke build on every push to main and every PR — catch FTBFS
+#      regressions early (OpenSSL 3 / GCC 14 / autoconf breakage).
+#   2. On a "v*" tag — build .deb packages for a matrix of Debian/Ubuntu
+#      releases on amd64 + arm64, then attach every .deb to the Release.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) Smoke build: ./configure && make on the hosted Ubuntu runner.
+  #    Fast sanity check that the tree still compiles against current
+  #    OpenSSL / GCC. Runs on push-to-main and on PRs (not strictly needed
+  #    for tags, but harmless and cheap).
+  # ---------------------------------------------------------------------------
+  smoke-build:
+    name: smoke build (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc make libssl-dev liblzo2-dev zlib1g-dev flex bison
+
+      - name: configure && make
+        run: |
+          ./configure
+          make
+
+  # ---------------------------------------------------------------------------
+  # 2) .deb matrix: only on tag pushes ("v*").
+  #
+  #    Strategy:
+  #      - One job per (distro x arch) combination.
+  #      - The distro is provided by a container image (debian:12/13,
+  #        ubuntu:22.04/24.04) so we build against that release's exact
+  #        toolchain + libssl, regardless of the host runner's OS.
+  #      - arm64 is built NATIVELY on the "ubuntu-24.04-arm" hosted runner
+  #        (simplest robust approach — no QEMU emulation, full speed, no
+  #        binfmt setup). amd64 builds on the normal "ubuntu-latest" runner.
+  #        The container image is pulled for the matching architecture
+  #        automatically because each job runs on a host of that arch.
+  # ---------------------------------------------------------------------------
+  deb:
+    name: deb ${{ matrix.image }} (${{ matrix.arch }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - debian:12
+          - debian:13
+          - ubuntu:22.04
+          - ubuntu:24.04
+        arch: [amd64, arm64]
+        include:
+          # Map each arch to a host runner of that architecture so the
+          # container (and thus the produced .deb) is the right ABI natively.
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      # The container images are minimal; install git (checkout@v4 falls back to the git CLI), plus the toolchain, vtun's build-deps, and the Debian
+      # packaging tools (debhelper provides dh; devscripts pulls in helpers).
+      - name: Install build + packaging dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git ca-certificates \
+            gcc make libssl-dev liblzo2-dev zlib1g-dev flex bison \
+            debhelper devscripts build-essential
+
+      - uses: actions/checkout@v4
+
+      # debian/source/format is 3.0 (native); -b builds a binary-only
+      # package; -us -uc skips GPG signing (no key in CI).
+      - name: Build .deb (dpkg-buildpackage)
+        run: |
+          dpkg-buildpackage -us -uc -b
+
+      # dpkg-buildpackage drops the artifacts in the PARENT directory.
+      - name: Collect .deb artifacts
+        run: |
+          mkdir -p artifacts
+          mv ../*.deb artifacts/
+          ls -l artifacts
+
+      # Sanitise the image string for the artifact name (no ':' allowed).
+      - name: Compute artifact name
+        id: name
+        run: |
+          safe="$(echo "${{ matrix.image }}" | tr ':' '-')"
+          echo "value=deb-${safe}-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload .deb as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.value }}
+          path: artifacts/*.deb
+          if-no-files-found: error
+
+      # Attach this job's .deb(s) directly to the GitHub Release for the tag.
+      # softprops/action-gh-release creates the release if it doesn't exist
+      # yet and appends files on subsequent matrix jobs. Needs write access
+      # to repository contents (see permissions below).
+      - name: Attach .deb to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.deb
+
+    # Release upload requires write permission on repository contents.
+    permissions:
+      contents: write
