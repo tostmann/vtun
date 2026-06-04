@@ -78,8 +78,9 @@ jobs:
             runner: ubuntu-24.04-arm
 
     steps:
-      # The container images are minimal; install git (checkout@v4 falls back to the git CLI), plus the toolchain, vtun's build-deps, and the Debian
-      # packaging tools (debhelper provides dh; devscripts pulls in helpers).
+      # The container images are minimal; install git (the checkout action falls
+      # back to the git CLI), plus the toolchain, vtun's build-deps, and the
+      # Debian packaging tools (debhelper provides dh; devscripts pulls in helpers).
       - name: Install build + packaging dependencies
         run: |
           apt-get update
