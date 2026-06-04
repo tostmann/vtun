@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+# Debian packaging for the vtun OpenSSL-3 / modern-system fork.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+# The upstream Makefile "install" target does not reliably honour DESTDIR
+# and may install to /usr/local, so install the build artifacts explicitly
+# into the package staging tree.
+override_dh_auto_install:
+	install -D -m 0755 vtund debian/vtun/usr/sbin/vtund
+	install -D -m 0644 vtund.8 debian/vtun/usr/share/man/man8/vtund.8
+	install -D -m 0644 vtund.conf.5 debian/vtun/usr/share/man/man5/vtund.conf.5
+	install -D -m 0644 vtund.conf debian/vtun/usr/share/doc/vtun/examples/vtund.conf

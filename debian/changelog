@@ -1,0 +1,13 @@
+vtun (3.0.4+fork1) unstable; urgency=medium
+
+  * Maintained fork making vtun build and run on modern systems (OpenSSL 3.x,
+    GCC 14+, Debian 13 "trixie", Ubuntu 24.04). Fixes the OpenSSL 3 Blowfish
+    crash by loading the legacy provider in-process before daemonising and
+    porting the EVP cipher code to the opaque OpenSSL 1.1+/3.x API; fixes the
+    non-ECB modes (CBC/CFB/OFB) via a correct htonl() prototype
+    (<arpa/inet.h>); builds cleanly on GCC 14 (-fcommon, prototype includes,
+    C99 inline fix); repairs HAVE_WORKING_FORK detection for standalone-server
+    (-s) mode and up/down scripts; and refreshes config.guess/config.sub for
+    aarch64/arm64.
+
+ -- Dirk Tostmann <tostmann@gmail.com>  Wed, 04 Jun 2026 12:00:00 +0000

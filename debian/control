@@ -1,0 +1,52 @@
+Source: vtun
+Section: net
+Priority: optional
+Maintainer: Dirk Tostmann <tostmann@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ libssl-dev,
+ liblzo2-dev,
+ zlib1g-dev,
+ flex,
+ bison
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://vtun.sourceforge.net/
+
+Package: vtun
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: virtual tunnel over TCP/IP networks (OpenSSL 3 / modern-system fork)
+ VTun (vtund) creates virtual tunnels over TCP/IP networks, supporting IP,
+ Ethernet, serial and pipe tunnels with traffic shaping, compression and
+ encryption. This is a maintained fork that makes vtun build and run on
+ modern systems: OpenSSL 3.x, GCC 14+, Debian 13 "trixie" and Ubuntu 24.04,
+ where vtun is no longer packaged.
+ .
+ The key fix targets the OpenSSL 3 transition. Blowfish is vtun's default
+ cipher ("encrypt yes" == blowfish128ecb), and on OpenSSL 3 Blowfish moved
+ into the "legacy" provider, which is not loaded by default. Pristine vtun
+ ignored the resulting cipher-init failure and dereferenced a half-initialised
+ context, segfaulting inside libcrypto.so.3 the moment a Blowfish session
+ connected. Because vtund forks one child per session, only the child died
+ while the master kept logging "waiting for connections", so the crash looked
+ like clients randomly failing to connect. This fork loads the OpenSSL 3
+ legacy provider in-process (before daemonising, so it survives the
+ environment-stripping fork) and ports the EVP cipher code to the opaque
+ OpenSSL 1.1+/3.x API. It also fixes the non-ECB modes (CBC/CFB/OFB) by
+ including <arpa/inet.h> for a correct htonl() prototype, builds cleanly on
+ GCC 14, and repairs fork detection for standalone-server (-s) mode.
+ .
+ Supported ciphers are Blowfish and AES (128- and 256-bit) in ECB/CBC/CFB/OFB
+ modes. For Blowfish sessions the OpenSSL legacy provider must be present at
+ runtime; on Debian/Ubuntu it ships as ossl-modules/legacy.so in the standard
+ libssl3 package, so normally nothing extra needs to be installed. AES
+ sessions need only the default provider.
+ .
+ Security note: Blowfish has a 64-bit block size (Sweet32, CVE-2016-2183) and
+ the default uses ECB mode (leaks repeated plaintext blocks); prefer
+ "encrypt aes256cbc" for new setups. vtun has no AEAD, no message
+ authentication and no forward secrecy; for greenfield deployments a modern
+ VPN such as WireGuard is the better choice. This fork exists to keep existing
+ vtun deployments working on modern systems, especially hubs whose legacy
+ peers can only speak vtun.
