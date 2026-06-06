@@ -16,6 +16,9 @@ override_dh_auto_install:
 	install -D -m 0644 vtund.conf debian/vtun/usr/share/doc/vtun/examples/vtund.conf
 	# default config (conffile) so the systemd units have a target to read
 	install -D -m 0640 vtund.conf debian/vtun/etc/vtund.conf
+	# stats directory (upstream "make install" creates it too); the lock dir
+	# lives on the /run tmpfs and is handled by debian/vtun.tmpfiles instead
+	install -d -m 0755 debian/vtun/var/log/vtund
 
 # Ship the systemd units (vtund.service + vtund-client@.service) but do NOT
 # enable or start them on install — they need /etc/vtund.conf configured first.

@@ -1,0 +1,5 @@
+# vtund creates per-session lock files in /var/lock/vtund (VTUN_LOCK_DIR).
+# On modern Debian/Ubuntu /var/lock is a symlink to the tmpfs /run/lock, so
+# the directory must be (re)created at every boot — without it server-side
+# authentication fails with "Can't create temp lock file".
+d /run/lock/vtund 0755 root root -

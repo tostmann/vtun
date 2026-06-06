@@ -12,7 +12,10 @@ autom4te.cache/
 /cfg_file.tab.c
 /cfg_file.tab.h
 /cfg_file.lex.c
+# Autotools backup files (autoconf/autoheader re-runs)
+*~
 # Debian build outputs
+/debian/debhelper-build-stamp
 /debian/vtun/
 /debian/.debhelper/
 /debian/files
