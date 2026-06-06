@@ -212,7 +212,38 @@ static void sig_usr1(int sig)
 {
      /* Reset statistic counters on SIGUSR1 */
      lfd_host->stat.byte_in = lfd_host->stat.byte_out = 0;
-     lfd_host->stat.comp_in = lfd_host->stat.comp_out = 0; 
+     lfd_host->stat.comp_in = lfd_host->stat.comp_out = 0;
+}
+
+/*
+ * Should this frame, just read from the local tun, be forwarded into the
+ * tunnel?  Drop link-local multicast: IPv4 224.0.0.0/24 (the Local Network
+ * Control Block) and IPv6 ff02::/16 (link-local scope).
+ *
+ * A modern Linux kernel, the instant a freshly created tun is brought UP by
+ * the up{} script, emits an autoconf multicast burst — IPv6 Router-Solicit-
+ * ation + MLDv2 reports and an IPv4 IGMPv3 report.  Forwarding those into a
+ * routed point-to-point tunnel serves no purpose and is actively harmful: a
+ * peer whose own up{} has not finished yet writes the frame to its still-DOWN
+ * tun, the kernel returns EIO, and the peer's session dies and reconnect-loops
+ * until it happens to win the race.  Older kernels never put this traffic on
+ * the wire, which is why long-working peers broke only after the hub moved to
+ * a current OS.  Link-local-scoped multicast must never leave its link, so we
+ * never tunnel it — by default, with no config change on either end and no
+ * effect on the wire protocol.
+ *
+ * tun runs with IFF_NO_PI, so buf[0] is the first byte of the IP header.
+ */
+static inline int lfd_drop_frame(unsigned char *p, int len)
+{
+     switch( (p[0] >> 4) & 0xf ){
+        case 4:  /* IPv4: dst addr at bytes 16..19 */
+           return len >= 20 && p[16] == 224 && p[17] == 0 && p[18] == 0;
+        case 6:  /* IPv6: dst addr at bytes 24..39 */
+           return len >= 40 && p[24] == 0xff && p[25] == 0x02;
+        default:
+           return 0;
+     }
 }
 
 static int lfd_linker(void)
@@ -336,8 +367,12 @@ static int lfd_linker(void)
 		 continue;
 	   }
 	   if( !len ) break;
-	
-	   lfd_host->stat.byte_out += len; 
+
+	   /* Never tunnel link-local multicast (RS/MLD/IGMP autoconf burst) */
+	   if( lfd_drop_frame((unsigned char *)buf, len) )
+	      continue;
+
+	   lfd_host->stat.byte_out += len;
 	   if( (len=lfd_run_down(len,buf,&out)) == -1 )
 	      break;
 	   if( len && proto_write(fd1, out, len) < 0 )
