@@ -22,6 +22,8 @@ If you run upstream vtun / vtund on a current system, you have probably hit one 
 
   so the crash is **invisible in the normal logs** — it just looks like clients can't establish or keep a tunnel. This is the same root cause as the `libcrypto.so.3` segfault above.
 
+- **Long-working clients suddenly reconnect-loop after the server moved to a modern OS.** The client logs `Input/output error (5)` right after connecting, the server logs `Connection closed by other side`, and the session retries every few seconds — sometimes succeeding after minutes, seemingly at random. The cause is **not** the network: a modern Linux kernel emits a link-local multicast autoconf burst (IPv6 Router Solicitation + MLDv2 and an IPv4 IGMPv3 report) the instant a freshly created `tun` interface comes up. Pristine vtund forwards that burst into the tunnel; if the peer's `up{}` script has not finished yet, the peer writes the frames into its still-DOWN tun, gets `EIO`, and its session dies. Whether a client survives is a pure race against its own `up{}` script. Older kernels never generated this traffic, which is why the same clients worked for years against the old server.
+
 - **vtun was removed from Debian 13 (trixie).** It is no longer in the current Debian / Ubuntu package archives, so `apt install vtun` no longer works.
 
 - **Upstream vtun 3.0.4 fails to build (FTBFS) against OpenSSL 3 and GCC 14.** OpenSSL 3 made `EVP_CIPHER_CTX` opaque, and GCC 14 promotes **implicit function declarations** to errors and defaults to **`-fno-common`**. The pristine 3.0.4 sources (last upstream release, 2016) do not compile on either.
@@ -36,6 +38,9 @@ If any of that matches what you are seeing, this fork is what you are looking fo
 - **Compiles cleanly on GCC 14 / modern glibc:** proper prototype includes (`unistd.h`, `time.h`, `stdlib.h`, plus `_GNU_SOURCE`), `-fcommon` for the legacy common-symbol globals, and a C99 `inline` fix.
 - **Fixes `HAVE_WORKING_FORK` detection.** The autoconf test mis-detected, which silently compiled out the standalone server (`-s`) mode and the up/down-script fork path.
 - **Refreshes `config.guess` / `config.sub`** so `./configure` works on **aarch64 / arm64**.
+- **Never tunnels link-local multicast** (IPv4 `224.0.0.0/24`, IPv6 `ff02::/16`) read from the local tun. This stops the kernel's autoconf burst from killing peers whose `up{}` script is still running (the reconnect-loop described above) — by default, with no config change on either end and no change to the wire protocol. Link-local-scoped multicast must never leave its link anyway; global-scope multicast and all unicast traffic are forwarded unchanged.
+- **Logs each message once.** Pristine vtund's `openlog(..., LOG_PERROR, ...)` writes every syslog message to stderr as well; under systemd (foreground `-n`) the journal captured both copies, doubling every line. The fork drops `LOG_PERROR`.
+- **Creates the runtime lock directory via `tmpfiles.d`** (`/run/lock/vtund`). `/var/lock` is a tmpfs on modern systems; without the directory, server-side authentication fails with `Can't create temp lock file`.
 
 ## Build from source
 

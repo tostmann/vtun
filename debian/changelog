@@ -1,3 +1,22 @@
+vtun (3.0.4+fork3) unstable; urgency=medium
+
+  * Never tunnel link-local multicast read from the local tun (IPv4
+    224.0.0.0/24, IPv6 ff02::/16). Modern kernels emit an autoconf burst
+    (IPv6 Router Solicitation + MLDv2, IPv4 IGMPv3) the instant a freshly
+    created tun comes up; forwarding it into the tunnel hits the peer's
+    still-DOWN tun ("Input/output error (5)") and made slower clients
+    reconnect-loop against hubs running a current OS. Wire protocol
+    unchanged; global-scope multicast and unicast are unaffected.
+  * Log each message once: drop LOG_PERROR from openlog(), which doubled
+    every journal line under systemd foreground (-n) operation (syslog
+    socket + stderr both captured).
+  * Packaging: ship a tmpfiles.d snippet creating /run/lock/vtund —
+    /var/lock is a tmpfs on modern systems and the directory was missing,
+    so server-side auth failed with "Can't create temp lock file".
+    Also create the stats directory /var/log/vtund.
+
+ -- Dirk Tostmann <tostmann@gmail.com>  Sat, 06 Jun 2026 09:15:00 +0000
+
 vtun (3.0.4+fork2) unstable; urgency=medium
 
   * Add native systemd units: vtund.service (standalone server) and

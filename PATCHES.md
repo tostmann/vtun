@@ -140,6 +140,42 @@ Replace both files with up-to-date GNU `config.guess` / `config.sub`, which know
 
 ---
 
+## 7. Link-local multicast filter — fixes the reconnect-loop against modern hubs
+
+**File(s):** `linkfd.c`
+
+**What was wrong**
+
+A modern Linux kernel, the instant a freshly created `tun` interface is brought UP by the `up{}` script, emits a link-local multicast autoconf burst: IPv6 **Router Solicitation** and **MLDv2 reports** (to `ff02::/16`) plus an IPv4 **IGMPv3 report** (to `224.0.0.22`). Pristine vtund's `lfd_linker()` reads whatever appears on its tun and forwards it into the tunnel.
+
+On a routed point-to-point tunnel this traffic serves no purpose — and it is actively harmful: if the **peer's** `up{}` script has not finished yet, the peer receives the burst and `dev_write()`s it into its **still-DOWN** tun. The kernel returns `EIO`, the peer's linker loop treats that as fatal, the session dies (`Input/output error (5)` on the peer, `Connection closed by other side` on the sender) and reconnects — re-triggering the same burst. Whether a client survives is a pure race between its `up{}` script and the burst's arrival. Fast clients connect first try; slow ones (e.g. small ARM boards running interpreted `up{}` helpers) loop for minutes.
+
+Older kernels never generated this multicast on tun interfaces, which is why long-working deployments broke **only after the server moved to a current OS** — the classic symptom is "all clients worked for years, we replaced the hub, now some clients reconnect-loop."
+
+Note that disabling IPv6 on the tun is **not** sufficient: the IPv4 IGMPv3 report alone also kills the race-losing peer. Clearing `IFF_MULTICAST` on the tun at open time empirically does not suppress the burst either.
+
+**The fix**
+
+In `linkfd.c`, a small filter (`lfd_drop_frame()`) in the TUN→NET path drops frames whose destination is **link-local-scoped multicast** — IPv4 `224.0.0.0/24` (the Local Network Control Block, RFC 5771) or IPv6 `ff02::/16` (link-local scope) — immediately after `dev_read()`, before compression/encryption/`proto_write()`. The tun runs with `IFF_NO_PI`, so the IP version nibble and the destination address are at fixed offsets in the frame.
+
+Link-local-scoped multicast must never be forwarded off its link, so dropping it is correct by definition, not a workaround. Global-/admin-scope multicast (`224.0.1.0` and up) and all unicast traffic are forwarded unchanged; nothing about the wire protocol changes, and the fix is active by default on both ends with no configuration.
+
+---
+
+## 8. Single-copy logging — drop `LOG_PERROR`
+
+**File(s):** `main.c`
+
+**What was wrong**
+
+Both `openlog()` calls passed `LOG_PERROR`, which makes glibc write every syslog message to **stderr** as well. Run in the foreground under systemd (`vtund -n`, as the shipped units do), the journal captures the syslog socket **and** stderr — so **every log line appeared twice**, with confusingly different idents (vtund rewrites `argv[0]` per session for `ps`, and the syslog-socket copy follows that title while the stderr copy keeps the unit ident).
+
+**The fix**
+
+Drop `LOG_PERROR` from both `openlog()` calls. Each message is logged exactly once, via syslog.
+
+---
+
 ## Notes
 
 - License unchanged: **GPL-2.0**; upstream copyright preserved — *Copyright (C) 1998-2016 Maxim Krasnyansky*.
