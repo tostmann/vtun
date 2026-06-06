@@ -107,8 +107,11 @@ int main(int argc, char *argv[], char *env[])
      default_host.ka_maxfail  = 4;
      default_host.loc_fd = default_host.rmt_fd = -1;
 
-     /* Start logging to syslog and stderr */
-     openlog("vtund", LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_DAEMON);
+     /* Start logging to syslog.  No LOG_PERROR: with it glibc also copies
+      * every message to stderr, and under a foreground supervisor (systemd
+      * with -n) the journal then records each line twice — once from the
+      * syslog socket, once from stderr. */
+     openlog("vtund", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
      /* OpenSSL 3 moved Blowfish (and other legacy ciphers) into the 'legacy'
@@ -168,7 +171,7 @@ int main(int argc, char *argv[], char *env[])
      if (vtun.syslog != LOG_DAEMON) {
 	/* Restart logging to syslog using specified facility  */
  	closelog();
- 	openlog("vtund", LOG_PID|LOG_NDELAY|LOG_PERROR, vtun.syslog);
+ 	openlog("vtund", LOG_PID|LOG_NDELAY, vtun.syslog);
      }
 
 	clear_nat_hack_flags(svr);
